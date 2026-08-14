@@ -12,10 +12,12 @@
     "lint:fix": "oxlint --fix && oxfmt ."
   },
   "dependencies": {
-    "astro": "^7.2.2"
+    "astro": "^7.2.2",
+    "matter-js": "^0.20.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@types/matter-js": "^0.20.2",
     "oxfmt": "^0.62.0",
     "oxlint": "^1.77.0",
     "typescript": "^5.9.2"
