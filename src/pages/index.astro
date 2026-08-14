@@ -1,0 +1,62 @@
+---
+// 단일 화면. 라우팅 없음. 페이지 셸은 빌드 타임에 정적 생성되고,
+// 물리 엔진은 이후 PR 에서 client 스크립트로만 실행된다 (SSR 없음).
+const title = "Gravitype";
+const description = "타이핑한 글자가 물리 객체가 되어 떨어지고, 쌓이고, 무너지는 웹 장난감";
+
+// base 설정('/gravitype') 유무·트레일링 슬래시와 무관하게 안전한 자산 경로
+const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0b0b10" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main id="stage">
+      <p id="hint">탭하고 아무 글자나 쳐 보세요</p>
+    </main>
+  </body>
+</html>
+
+<style>
+  /* 처음부터 어두운 배경 하나로 간다 (PRD §7 — 다크모드 토글 없음) */
+  :global(html, body) {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #0b0b10;
+    color: #e8e8ef;
+    font-family: system-ui, sans-serif;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #stage {
+    position: fixed;
+    inset: 0;
+  }
+
+  #hint {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    font-size: 1rem;
+    color: #9a9aa8;
+    user-select: none;
+    pointer-events: none;
+  }
+</style>
