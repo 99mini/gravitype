@@ -1,0 +1,161 @@
+// 물리 월드 + 캔버스 렌더 루프.
+// matter.js 기본 렌더러 대신 캔버스에 글자를 직접 그린다 (PRD §6).
+import Matter from "matter-js";
+
+import { PHYSICS, RENDER, WORLD } from "./constants";
+
+const { Bodies, Body, Composite, Engine } = Matter;
+
+interface LetterBody {
+  body: Matter.Body;
+  char: string;
+  /** 렌더·충돌체 크기 (CSS px) */
+  width: number;
+  height: number;
+}
+
+export interface StageOptions {
+  /** 첫 물체가 생성될 때 한 번 호출 (첫 진입 힌트 제거용) */
+  onFirstSpawn?: () => void;
+}
+
+export interface Stage {
+  /** 글자 하나를 화면 상단 중앙에서 떨어뜨린다 */
+  spawnLetter: (char: string) => void;
+}
+
+export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}): Stage {
+  const maybeCtx = canvas.getContext("2d");
+  if (!maybeCtx) {
+    throw new Error("Canvas 2D context 를 얻지 못했다");
+  }
+  // 클로저(resize/frame) 안에서도 non-null 로 쓰기 위해 확정된 참조로 옮긴다
+  const ctx: CanvasRenderingContext2D = maybeCtx;
+
+  const engine = Engine.create();
+  engine.gravity.y = PHYSICS.gravityY;
+
+  const letters: LetterBody[] = [];
+  let firstSpawnFired = false;
+
+  // 글자 크기 측정용 오프스크린 캔버스 (실제 잉크 면적 질량은 다음 PR)
+  const measureCtx = document.createElement("canvas").getContext("2d");
+
+  let viewWidth = 0;
+  let viewHeight = 0;
+
+  // ── 정적 경계: 바닥 + 좌우 벽 ──────────────────────────────
+  // 리사이즈 때 위치만 다시 잡을 수 있도록 한 번 만들고 재배치한다.
+  const t = WORLD.wallThicknessPx;
+  const floor = Bodies.rectangle(0, 0, 1, t, { isStatic: true });
+  const wallLeft = Bodies.rectangle(0, 0, t, 1, { isStatic: true });
+  const wallRight = Bodies.rectangle(0, 0, t, 1, { isStatic: true });
+  Composite.add(engine.world, [floor, wallLeft, wallRight]);
+
+  function layoutBounds() {
+    const w = viewWidth;
+    const h = viewHeight;
+    // 스케일이 1로 만들어졌으므로 setVertices 로 크기를 갱신한다
+    Body.setVertices(floor, Bodies.rectangle(0, 0, w * 3, t, { isStatic: true }).vertices);
+    Body.setPosition(floor, { x: w / 2, y: h + t / 2 });
+    Body.setVertices(wallLeft, Bodies.rectangle(0, 0, t, h * 4, { isStatic: true }).vertices);
+    Body.setPosition(wallLeft, { x: -t / 2, y: h / 2 });
+    Body.setVertices(wallRight, Bodies.rectangle(0, 0, t, h * 4, { isStatic: true }).vertices);
+    Body.setPosition(wallRight, { x: w + t / 2, y: h / 2 });
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, RENDER.maxDevicePixelRatio);
+    viewWidth = window.innerWidth;
+    viewHeight = window.innerHeight;
+    canvas.width = Math.round(viewWidth * dpr);
+    canvas.height = Math.round(viewHeight * dpr);
+    canvas.style.width = `${viewWidth}px`;
+    canvas.style.height = `${viewHeight}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layoutBounds();
+  }
+
+  resize();
+  window.addEventListener("resize", resize);
+
+  // ── 글자 스폰 ──────────────────────────────────────────────
+  function measureLetter(char: string): { width: number; height: number } {
+    const size = RENDER.fontSizePx;
+    if (!measureCtx) {
+      return { width: size, height: size };
+    }
+    measureCtx.font = `${size}px ${RENDER.fontFamily}`;
+    const m = measureCtx.measureText(char);
+    const width = Math.max(m.width, size * 0.2);
+    const height = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent || size;
+    return { width, height };
+  }
+
+  function spawnLetter(char: string) {
+    const { width, height } = measureLetter(char);
+    const jitter = (Math.random() - 0.5) * 2 * WORLD.spawnJitterPx;
+    const x = viewWidth / 2 + jitter;
+    const y = -(height / 2) - WORLD.spawnAboveTopPx;
+
+    const body = Bodies.rectangle(x, y, width, height, {
+      chamfer: { radius: Math.min(PHYSICS.chamferRadiusPx, width / 3, height / 3) },
+      restitution: PHYSICS.restitution,
+      friction: PHYSICS.friction,
+      frictionAir: PHYSICS.frictionAir,
+      angle: (Math.random() - 0.5) * 0.3,
+    });
+    Composite.add(engine.world, body);
+    letters.push({ body, char, width, height });
+
+    if (!firstSpawnFired) {
+      firstSpawnFired = true;
+      options.onFirstSpawn?.();
+    }
+
+    // 상한 초과 시 가장 오래된 것부터 제거
+    while (letters.length > WORLD.maxBodies) {
+      const oldest = letters.shift();
+      if (oldest) {
+        Composite.remove(engine.world, oldest.body);
+      }
+    }
+  }
+
+  // ── 렌더 루프 ──────────────────────────────────────────────
+  let lastTime = performance.now();
+
+  function frame(now: number) {
+    const delta = Math.min(now - lastTime, 1000 / 30); // 탭 전환 복귀 시 폭주 방지
+    lastTime = now;
+    Engine.update(engine, delta);
+
+    // 화면 밖으로 떨어진 물체 제거
+    for (let i = letters.length - 1; i >= 0; i--) {
+      const letter = letters[i];
+      if (letter && letter.body.position.y > viewHeight + WORLD.cullMarginPx) {
+        Composite.remove(engine.world, letter.body);
+        letters.splice(i, 1);
+      }
+    }
+
+    ctx.clearRect(0, 0, viewWidth, viewHeight);
+    ctx.font = `${RENDER.fontSizePx}px ${RENDER.fontFamily}`;
+    ctx.fillStyle = RENDER.textColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const { body, char } of letters) {
+      ctx.save();
+      ctx.translate(body.position.x, body.position.y);
+      ctx.rotate(body.angle);
+      ctx.fillText(char, 0, 0);
+      ctx.restore();
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+
+  return { spawnLetter };
+}
