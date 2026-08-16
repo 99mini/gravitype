@@ -26,15 +26,18 @@ const base = import.meta.env.BASE_URL.endsWith("/")
   <body>
     <main id="stage">
       <canvas id="stage-canvas"></canvas>
-      <p id="hint">탭해서 글자를 떨어뜨려 보세요</p>
+      <p id="ghost" hidden></p>
+      <p id="hint">탭하고 아무 글자나 쳐 보세요</p>
     </main>
   </body>
 </html>
 
 <script>
+  import { mountHiddenInput } from "../lib/input";
   import { mountStage } from "../lib/stage";
 
   const canvas = document.querySelector<HTMLCanvasElement>("#stage-canvas");
+  const ghost = document.querySelector<HTMLParagraphElement>("#ghost");
   const hint = document.querySelector<HTMLParagraphElement>("#hint");
   if (!canvas) {
     throw new Error("#stage-canvas 를 찾지 못했다");
@@ -42,14 +45,18 @@ const base = import.meta.env.BASE_URL.endsWith("/")
 
   const stage = mountStage(canvas, { onFirstSpawn: () => hint?.remove() });
 
-  // 키보드 입력은 다음 PR — 지금은 탭할 때마다 샘플 글자를 떨어뜨린다
-  const sample = [..."가나다라마바사아자차카타파하구름별빛바람웃음?!"];
-  canvas.addEventListener("pointerdown", () => {
-    const char = sample[Math.floor(Math.random() * sample.length)];
-    if (char) {
-      stage.spawnLetter(char);
-    }
+  const input = mountHiddenInput(document.body, {
+    onChar: (char) => stage.spawnLetter(char),
+    onComposing: (text) => {
+      if (ghost) {
+        ghost.textContent = text;
+        ghost.hidden = text === "";
+      }
+    },
   });
+
+  // 탭하면 네이티브 키보드를 소환한다
+  canvas.addEventListener("pointerdown", () => input.focus());
 </script>
 
 <style>
@@ -74,6 +81,20 @@ const base = import.meta.env.BASE_URL.endsWith("/")
     position: absolute;
     inset: 0;
     touch-action: none;
+  }
+
+  /* 조합 중 고스트 — 스폰 지점(상단 중앙)에 흐리게 */
+  #ghost {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 0;
+    right: 0;
+    margin: 0;
+    text-align: center;
+    font-size: 56px;
+    color: rgba(232, 232, 239, 0.35);
+    user-select: none;
+    pointer-events: none;
   }
 
   #hint {
