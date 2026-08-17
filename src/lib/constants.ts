@@ -40,6 +40,10 @@ export const SHAPES = {
   bouncyRestitution: 0.45,
   /** 잘 튀는 글자들의 공기 저항 — 회전·이동을 빨리 잦아들게 해 헛돌기 방지 */
   bouncyFrictionAir: 0.04,
+  /** 잘 튀는 글자들의 표면 마찰 — 바닥에서 미끄러지며 돌아다니지 않게 */
+  bouncyFriction: 0.6,
+  /** 회전 관성 배율 — 작은 기호가 바퀴처럼 데굴데굴 구르지 않게 */
+  bouncyInertiaScale: 8,
   bouncyChars: ".,'`·:;\"",
 } as const;
 

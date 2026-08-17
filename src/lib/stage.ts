@@ -1,6 +1,6 @@
 // 물리 월드 + 캔버스 렌더 루프.
 // matter.js 기본 렌더러 대신 캔버스에 글자를 직접 그린다 (PRD §6).
-import Matter, { type IBodyDefinition } from "matter-js";
+import Matter, { type IChamferableBodyDefinition } from "matter-js";
 
 import { MASS, PHYSICS, RENDER, SHAPES, WORLD } from "./constants";
 
@@ -130,23 +130,28 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
     const y = -(height / 2) - WORLD.spawnAboveTopPx;
 
     const bouncy = SHAPES.bouncyChars.includes(char);
-    const bodyOptions: IBodyDefinition = {
+    const bodyOptions: IChamferableBodyDefinition = {
       restitution: bouncy ? SHAPES.bouncyRestitution : PHYSICS.restitution,
-      friction: PHYSICS.friction,
+      friction: bouncy ? SHAPES.bouncyFriction : PHYSICS.friction,
       frictionAir: bouncy ? SHAPES.bouncyFrictionAir : PHYSICS.frictionAir,
       angle: (Math.random() - 0.5) * 0.3,
     };
 
     // 원형 글자는 원형 충돌체 — 굴러간다. 나머지는 모서리 깎은 사각형 (PRD §4.2)
+    // 단 작은 기호는 깎으면 거의 원이 되어 바퀴처럼 굴러다니므로 각지게 둔다
     const body = SHAPES.circles.includes(char)
       ? Bodies.circle(x, y, Math.max(width, height) / 2, bodyOptions)
-      : Bodies.rectangle(x, y, width, height, {
+      : Bodies.rectangle(x, y, width, height, bouncy ? bodyOptions : {
         ...bodyOptions,
         chamfer: { radius: Math.min(PHYSICS.chamferRadiusPx, width / 3, height / 3) },
       });
 
     // 잉크 면적 기반 질량 — 획이 많은 글자(뷁)는 무겁고, 이·아 는 가볍다
     Body.setMass(body, Math.max(MASS.min, measureInkArea(char) * MASS.perInkPixel));
+    if (bouncy) {
+      // 회전 관성을 키워 접촉 때마다 팽이처럼 도는 것을 막는다
+      Body.setInertia(body, body.inertia * SHAPES.bouncyInertiaScale);
+    }
     Composite.add(engine.world, body);
     letters.push({ body, char, width, height });
 
