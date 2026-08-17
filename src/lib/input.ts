@@ -1,19 +1,27 @@
 // 글자 입력 + IME 조합 처리 (PRD §4.1, §6).
 //
-// 보이지 않는 input 에 focus 를 주는 방식은 모바일 브라우저가 키보드를
-// 안정적으로 띄우지 않아서, 화면에 보이는 input 박스를 focus 대상으로 쓴다.
-// 한글은 IME 조합이 끝난 시점(compositionend)에만 물체를 만들고,
-// 조합 중(ㅎ → 하 → 한)은 input 박스 안에서 그대로 보인다.
+// 모바일 키보드는 표준 composition 이벤트를 따르지 않는 경우가 있다.
+// 특히 "일단 커밋하고 다음 자모가 오면 지우고 교체"하는 키보드에서는
+// 값을 즉시 스폰하고 비워버리면 조합이 끊겨 자모가 따로 떨어진다.
 //
-// iOS Safari 와 안드로이드 크롬의 이벤트 순서가 다르다:
-// - 조합 중 input 이벤트는 isComposing 으로 걸러서 중복 스폰을 막는다
-// - compositionend 에서 e.data 를 스폰하고 value 를 비우므로,
-//   그 뒤에 오는 input 이벤트는 빈 value 를 보고 아무것도 하지 않는다
+// 그래서 input.value 를 버퍼로 두고 "정착(settle)" 시점에만 스폰한다:
+// - 조합 중(composition / insertCompositionText)에는 아무것도 하지 않는다
+// - 조합이 끝나면 즉시 settle 예약 — 새 조합이 이미 시작됐으면 자동 스킵
+// - 조합 이벤트 없이 값이 바뀌는 키보드는, 마지막 글자가 아직 변할 수 있는
+//   한글(자모·음절)이면 잠깐(HANGUL_SETTLE_MS) 기다렸다가 settle 한다.
+//   그 사이 키보드가 값을 교체하면 교체된 결과가 스폰된다.
+// - 그 외(영문·숫자·기호)는 즉시 settle
 
 export interface InputHooks {
   /** 확정된 글자 하나 (공백·개행 제외) */
   onChar: (char: string) => void;
 }
+
+/** 커밋-교체형 키보드가 마지막 글자를 바꿀 시간 여유 */
+const HANGUL_SETTLE_MS = 300;
+
+/** 마지막 글자가 아직 변할 수 있는 한글: 호환 자모(ㄱ-ㅣ) 또는 완성 음절(가-힣) */
+const MUTABLE_HANGUL_TAIL = /[ㄱ-ㆎ가-힣]$/;
 
 export function wireLetterInput(input: HTMLInputElement, hooks: InputHooks) {
   input.autocomplete = "off";
@@ -23,41 +31,57 @@ export function wireLetterInput(input: HTMLInputElement, hooks: InputHooks) {
   input.setAttribute("enterkeyhint", "done");
 
   let composing = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function flushChars(text: string) {
-    for (const char of text) {
-      if (char.trim() === "") {
-        continue; // 공백은 물체 없음 (폭발 임펄스는 이후 PR)
-      }
-      hooks.onChar(char);
+  function settle() {
+    if (composing) {
+      return; // 새 조합이 시작됐다 — 그 조합의 settle 때 함께 스폰된다
     }
+    if (!input.value) {
+      return;
+    }
+    for (const char of input.value) {
+      if (char.trim() !== "") {
+        hooks.onChar(char);
+      }
+    }
+    input.value = "";
+  }
+
+  function scheduleSettle(delayMs: number) {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(settle, delayMs);
   }
 
   input.addEventListener("compositionstart", () => {
     composing = true;
+    clearTimeout(settleTimer);
   });
 
-  input.addEventListener("compositionend", (e) => {
+  input.addEventListener("compositionend", () => {
     composing = false;
-    if (e.data) {
-      flushChars(e.data);
-    }
-    input.value = "";
+    // 연속 타이핑으로 새 조합이 바로 시작되면 settle 이 스킵되고,
+    // 확정분은 버퍼에 남아 다음 settle 때 순서대로 스폰된다
+    scheduleSettle(0);
   });
 
   input.addEventListener("input", (e) => {
-    if (composing || (e as InputEvent).isComposing) {
-      return; // 조합 중 — compositionend 에서 처리한다
+    const ie = e as InputEvent;
+    if (composing || ie.isComposing || ie.inputType === "insertCompositionText") {
+      return; // 표준 조합 — compositionend 가 처리한다
     }
-    if (input.value) {
-      flushChars(input.value);
-      input.value = "";
+    if (MUTABLE_HANGUL_TAIL.test(input.value)) {
+      scheduleSettle(HANGUL_SETTLE_MS);
+    } else {
+      scheduleSettle(0);
     }
   });
 
+  // 키보드가 닫히면 남은 버퍼를 그대로 떨어뜨린다
   input.addEventListener("blur", () => {
     composing = false;
-    input.value = "";
+    clearTimeout(settleTimer);
+    settle();
   });
 }
 
