@@ -47,6 +47,19 @@ export const SHAPES = {
   bouncyChars: ".,'`·:;\"",
 } as const;
 
+export const MOTION = {
+  /** 이 각도(도)만큼 기울이면 중력이 완전히 그 방향을 향한다 */
+  tiltFullAtDeg: 45,
+  /** 흔들기로 판정할 가속도 크기 (m/s², 중력 제외) */
+  shakeAccelThreshold: 18,
+  /** 흔들기 연속 발동 방지 쿨다운 */
+  shakeCooldownMs: 500,
+  /** 흔들기 임펄스 — 물체에 더해지는 속도의 최대 크기 */
+  shakeKickPx: 14,
+  /** 글자를 이만큼 쌓은 뒤에 기울기 힌트/권한을 요청한다 (PRD §4.3) */
+  promptAfterLetters: 5,
+} as const;
+
 export const WORLD = {
   /** 바닥·벽 두께(px). 두껍게 해야 빠른 물체가 뚫고 나가지 않는다 */
   wallThicknessPx: 200,
