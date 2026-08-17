@@ -1,8 +1,8 @@
 // 물리 월드 + 캔버스 렌더 루프.
 // matter.js 기본 렌더러 대신 캔버스에 글자를 직접 그린다 (PRD §6).
-import Matter from "matter-js";
+import Matter, { type IBodyDefinition } from "matter-js";
 
-import { PHYSICS, RENDER, WORLD } from "./constants";
+import { MASS, PHYSICS, RENDER, SHAPES, WORLD } from "./constants";
 
 const { Bodies, Body, Composite, Engine } = Matter;
 
@@ -38,8 +38,12 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
   const letters: LetterBody[] = [];
   let firstSpawnFired = false;
 
-  // 글자 크기 측정용 오프스크린 캔버스 (실제 잉크 면적 질량은 다음 PR)
-  const measureCtx = document.createElement("canvas").getContext("2d");
+  // 글자 크기·잉크 면적 측정용 오프스크린 캔버스
+  const measureCanvas = document.createElement("canvas");
+  measureCanvas.width = RENDER.fontSizePx * 2;
+  measureCanvas.height = RENDER.fontSizePx * 2;
+  const measureCtx = measureCanvas.getContext("2d", { willReadFrequently: true });
+  const inkCache = new Map<string, number>();
 
   let viewWidth = 0;
   let viewHeight = 0;
@@ -92,19 +96,57 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
     return { width, height };
   }
 
+  /** 오프스크린에 글자를 그려 불투명 픽셀 수를 센다 — 이것이 질량이다 (PRD §4.2) */
+  function measureInkArea(char: string): number {
+    const cached = inkCache.get(char);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (!measureCtx) {
+      return RENDER.fontSizePx * RENDER.fontSizePx * 0.3;
+    }
+    const size = measureCanvas.width;
+    measureCtx.clearRect(0, 0, size, size);
+    measureCtx.font = `${RENDER.fontSizePx}px ${RENDER.fontFamily}`;
+    measureCtx.textAlign = "center";
+    measureCtx.textBaseline = "middle";
+    measureCtx.fillText(char, size / 2, size / 2);
+    const pixels = measureCtx.getImageData(0, 0, size, size).data;
+    let ink = 0;
+    for (let i = 3; i < pixels.length; i += 4) {
+      const alpha = pixels[i];
+      if (alpha !== undefined && alpha >= MASS.alphaThreshold) {
+        ink++;
+      }
+    }
+    inkCache.set(char, ink);
+    return ink;
+  }
+
   function spawnLetter(char: string) {
     const { width, height } = measureLetter(char);
     const jitter = (Math.random() - 0.5) * 2 * WORLD.spawnJitterPx;
     const x = viewWidth / 2 + jitter;
     const y = -(height / 2) - WORLD.spawnAboveTopPx;
 
-    const body = Bodies.rectangle(x, y, width, height, {
-      chamfer: { radius: Math.min(PHYSICS.chamferRadiusPx, width / 3, height / 3) },
-      restitution: PHYSICS.restitution,
+    const bouncy = SHAPES.bouncyChars.includes(char);
+    const bodyOptions: IBodyDefinition = {
+      restitution: bouncy ? SHAPES.bouncyRestitution : PHYSICS.restitution,
       friction: PHYSICS.friction,
       frictionAir: PHYSICS.frictionAir,
       angle: (Math.random() - 0.5) * 0.3,
-    });
+    };
+
+    // 원형 글자는 원형 충돌체 — 굴러간다. 나머지는 모서리 깎은 사각형 (PRD §4.2)
+    const body = SHAPES.circles.includes(char)
+      ? Bodies.circle(x, y, Math.max(width, height) / 2, bodyOptions)
+      : Bodies.rectangle(x, y, width, height, {
+        ...bodyOptions,
+        chamfer: { radius: Math.min(PHYSICS.chamferRadiusPx, width / 3, height / 3) },
+      });
+
+    // 잉크 면적 기반 질량 — 획이 많은 글자(뷁)는 무겁고, 이·아 는 가볍다
+    Body.setMass(body, Math.max(MASS.min, measureInkArea(char) * MASS.perInkPixel));
     Composite.add(engine.world, body);
     letters.push({ body, char, width, height });
 

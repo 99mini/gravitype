@@ -24,6 +24,23 @@ export const RENDER = {
   maxDevicePixelRatio: 2,
 } as const;
 
+export const MASS = {
+  /** 잉크 픽셀(불투명 픽셀) 하나당 질량 — 획이 많을수록 무겁다 (PRD §4.2) */
+  perInkPixel: 0.003,
+  /** 최소 질량 — `.` 같은 글자가 0에 수렴하지 않게 */
+  min: 0.08,
+  /** 잉크 측정 시 불투명으로 인정할 알파 임계값 (0-255) */
+  alphaThreshold: 24,
+} as const;
+
+export const SHAPES = {
+  /** 원형 충돌체 — 굴러간다 */
+  circles: "ㅇ0oO○◎●",
+  /** 아주 가볍고 잘 튀는 글자들의 반발계수 */
+  bouncyRestitution: 0.75,
+  bouncyChars: ".,'`·:;\"",
+} as const;
+
 export const WORLD = {
   /** 바닥·벽 두께(px). 두껍게 해야 빠른 물체가 뚫고 나가지 않는다 */
   wallThicknessPx: 200,
