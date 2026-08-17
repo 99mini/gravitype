@@ -26,37 +26,32 @@ const base = import.meta.env.BASE_URL.endsWith("/")
   <body>
     <main id="stage">
       <canvas id="stage-canvas"></canvas>
-      <p id="ghost" hidden></p>
-      <p id="hint">탭하고 아무 글자나 쳐 보세요</p>
+      <p id="hint">아무 글자나 쳐 보세요</p>
+      <input id="letter-input" type="text" placeholder="여기에 입력" aria-label="글자 입력" />
     </main>
   </body>
 </html>
 
 <script>
-  import { mountHiddenInput } from "../lib/input";
+  import { keepFocusForDesktop, wireLetterInput } from "../lib/input";
   import { mountStage } from "../lib/stage";
 
   const canvas = document.querySelector<HTMLCanvasElement>("#stage-canvas");
-  const ghost = document.querySelector<HTMLParagraphElement>("#ghost");
   const hint = document.querySelector<HTMLParagraphElement>("#hint");
-  if (!canvas) {
-    throw new Error("#stage-canvas 를 찾지 못했다");
+  const input = document.querySelector<HTMLInputElement>("#letter-input");
+  if (!canvas || !input) {
+    throw new Error("#stage-canvas / #letter-input 을 찾지 못했다");
   }
 
   const stage = mountStage(canvas, { onFirstSpawn: () => hint?.remove() });
 
-  const input = mountHiddenInput(document.body, {
-    onChar: (char) => stage.spawnLetter(char),
-    onComposing: (text) => {
-      if (ghost) {
-        ghost.textContent = text;
-        ghost.hidden = text === "";
-      }
-    },
-  });
+  wireLetterInput(input, { onChar: (char) => stage.spawnLetter(char) });
 
-  // 탭하면 네이티브 키보드를 소환한다
-  canvas.addEventListener("pointerdown", () => input.focus());
+  // 캔버스를 탭해도 입력 박스로 focus (click 은 신뢰된 제스처라 키보드가 뜬다)
+  canvas.addEventListener("click", () => input.focus({ preventScroll: true }));
+
+  // PC 에서는 별도 탭 없이 바로 타이핑
+  keepFocusForDesktop(input);
 </script>
 
 <style>
@@ -83,18 +78,32 @@ const base = import.meta.env.BASE_URL.endsWith("/")
     touch-action: none;
   }
 
-  /* 조합 중 고스트 — 스폰 지점(상단 중앙)에 흐리게 */
-  #ghost {
-    position: absolute;
-    top: calc(env(safe-area-inset-top, 0px) + 12px);
-    left: 0;
-    right: 0;
-    margin: 0;
+  /* 입력 박스 — safe-area 하단 중앙, 반투명 (PRD §5 하단 바 자리) */
+  #letter-input {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    width: min(70vw, 280px);
+    padding: 10px 16px;
+    /* 16px 미만이면 iOS 가 focus 시 화면을 확대한다 */
+    font-size: 18px;
     text-align: center;
-    font-size: 56px;
-    color: rgba(232, 232, 239, 0.35);
-    user-select: none;
-    pointer-events: none;
+    color: #e8e8ef;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    outline: none;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  #letter-input::placeholder {
+    color: #9a9aa8;
+  }
+
+  #letter-input:focus {
+    border-color: rgba(255, 255, 255, 0.35);
   }
 
   #hint {
