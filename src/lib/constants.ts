@@ -27,8 +27,8 @@ export const RENDER = {
 export const MASS = {
   /** 잉크 픽셀(불투명 픽셀) 하나당 질량 — 획이 많을수록 무겁다 (PRD §4.2) */
   perInkPixel: 0.003,
-  /** 최소 질량 — `.` 같은 글자가 0에 수렴하지 않게 */
-  min: 0.08,
+  /** 최소 질량 — `.` 같은 글자가 너무 가벼워 날뛰지 않게 */
+  min: 0.2,
   /** 잉크 측정 시 불투명으로 인정할 알파 임계값 (0-255) */
   alphaThreshold: 24,
 } as const;
@@ -36,8 +36,10 @@ export const MASS = {
 export const SHAPES = {
   /** 원형 충돌체 — 굴러간다 */
   circles: "ㅇ0oO○◎●",
-  /** 아주 가볍고 잘 튀는 글자들의 반발계수 */
-  bouncyRestitution: 0.75,
+  /** 잘 튀는 글자들의 반발계수 — 너무 높으면 끝없이 튄다 */
+  bouncyRestitution: 0.45,
+  /** 잘 튀는 글자들의 공기 저항 — 회전·이동을 빨리 잦아들게 해 헛돌기 방지 */
+  bouncyFrictionAir: 0.04,
   bouncyChars: ".,'`·:;\"",
 } as const;
 

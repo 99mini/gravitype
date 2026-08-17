@@ -133,7 +133,7 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
     const bodyOptions: IBodyDefinition = {
       restitution: bouncy ? SHAPES.bouncyRestitution : PHYSICS.restitution,
       friction: PHYSICS.friction,
-      frictionAir: PHYSICS.frictionAir,
+      frictionAir: bouncy ? SHAPES.bouncyFrictionAir : PHYSICS.frictionAir,
       angle: (Math.random() - 0.5) * 0.3,
     };
 
