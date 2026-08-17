@@ -2,7 +2,7 @@
 // matter.js 기본 렌더러 대신 캔버스에 글자를 직접 그린다 (PRD §6).
 import Matter, { type IChamferableBodyDefinition } from "matter-js";
 
-import { MASS, PHYSICS, RENDER, SHAPES, WORLD } from "./constants";
+import { MASS, MOTION, PHYSICS, RENDER, SHAPES, WORLD } from "./constants";
 
 const { Bodies, Body, Composite, Engine } = Matter;
 
@@ -22,6 +22,10 @@ export interface StageOptions {
 export interface Stage {
   /** 글자 하나를 화면 상단 중앙에서 떨어뜨린다 */
   spawnLetter: (char: string) => void;
+  /** 중력 벡터를 바꾼다 (기울기 컨트롤, 각 성분 -1~1) */
+  setGravity: (x: number, y: number) => void;
+  /** 전체 물체에 랜덤 임펄스 (흔들기) */
+  shake: () => void;
 }
 
 export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}): Stage {
@@ -204,5 +208,19 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
 
   requestAnimationFrame(frame);
 
-  return { spawnLetter };
+  function setGravity(x: number, y: number) {
+    engine.gravity.x = Math.max(-1, Math.min(1, x));
+    engine.gravity.y = Math.max(-1, Math.min(1, y));
+  }
+
+  function shake() {
+    for (const { body } of letters) {
+      Body.setVelocity(body, {
+        x: body.velocity.x + (Math.random() - 0.5) * 2 * MOTION.shakeKickPx,
+        y: body.velocity.y - Math.random() * MOTION.shakeKickPx,
+      });
+    }
+  }
+
+  return { spawnLetter, setGravity, shake };
 }

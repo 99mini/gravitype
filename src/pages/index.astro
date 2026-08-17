@@ -27,25 +27,41 @@ const base = import.meta.env.BASE_URL.endsWith("/")
     <main id="stage">
       <canvas id="stage-canvas"></canvas>
       <p id="hint">아무 글자나 쳐 보세요</p>
+      <button id="motion-hint" hidden>📱 기울여서 무너뜨리기</button>
       <input id="letter-input" type="text" placeholder="여기에 입력" aria-label="글자 입력" />
     </main>
   </body>
 </html>
 
 <script>
+  import { MOTION } from "../lib/constants";
   import { keepFocusForDesktop, wireLetterInput } from "../lib/input";
+  import { setupMotion } from "../lib/motion";
   import { mountStage } from "../lib/stage";
 
   const canvas = document.querySelector<HTMLCanvasElement>("#stage-canvas");
   const hint = document.querySelector<HTMLParagraphElement>("#hint");
   const input = document.querySelector<HTMLInputElement>("#letter-input");
+  const motionHint = document.querySelector<HTMLButtonElement>("#motion-hint");
   if (!canvas || !input) {
     throw new Error("#stage-canvas / #letter-input 을 찾지 못했다");
   }
 
   const stage = mountStage(canvas, { onFirstSpawn: () => hint?.remove() });
 
-  wireLetterInput(input, { onChar: (char) => stage.spawnLetter(char) });
+  // 글자를 몇 개 쌓은 뒤에 기울기/흔들기를 켠다 (iOS 는 힌트 버튼으로 권한 요청)
+  let spawnCount = 0;
+  let motionArmed = false;
+  wireLetterInput(input, {
+    onChar: (char) => {
+      stage.spawnLetter(char);
+      spawnCount++;
+      if (!motionArmed && spawnCount >= MOTION.promptAfterLetters) {
+        motionArmed = true;
+        setupMotion(stage, motionHint);
+      }
+    },
+  });
 
   // 캔버스를 탭해도 입력 박스로 focus (click 은 신뢰된 제스처라 키보드가 뜬다)
   canvas.addEventListener("click", () => input.focus({ preventScroll: true }));
@@ -104,6 +120,22 @@ const base = import.meta.env.BASE_URL.endsWith("/")
 
   #letter-input:focus {
     border-color: rgba(255, 255, 255, 0.35);
+  }
+
+  /* 기울기 권한 힌트 — 상단 중앙, 탭하면 iOS 권한 요청 */
+  #motion-hint {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 16px;
+    font-size: 14px;
+    color: #e8e8ef;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
   }
 
   #hint {
