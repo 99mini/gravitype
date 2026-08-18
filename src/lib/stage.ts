@@ -22,6 +22,8 @@ export interface StageOptions {
 export interface Stage {
   /** 글자 하나를 화면 상단 중앙에서 떨어뜨린다 */
   spawnLetter: (char: string) => void;
+  /** 바닥을 화면 아래에서 이만큼 올린다 (입력 박스·키보드 대응) */
+  setFloorInset: (px: number) => void;
   /** 중력 벡터를 바꾼다 (기울기 컨트롤, 각 성분 -1~1) */
   setGravity: (x: number, y: number) => void;
   /** 전체 물체에 랜덤 임펄스 (흔들기) */
@@ -51,6 +53,8 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
 
   let viewWidth = 0;
   let viewHeight = 0;
+  /** 화면 아래에서 이만큼 올려 바닥을 둔다 (입력 박스·키보드에 안 가리게) */
+  let floorInset = 0;
 
   // ── 정적 경계: 바닥 + 좌우 벽 ──────────────────────────────
   // 리사이즈 때 위치만 다시 잡을 수 있도록 한 번 만들고 재배치한다.
@@ -65,7 +69,7 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
     const h = viewHeight;
     // 스케일이 1로 만들어졌으므로 setVertices 로 크기를 갱신한다
     Body.setVertices(floor, Bodies.rectangle(0, 0, w * 3, t, { isStatic: true }).vertices);
-    Body.setPosition(floor, { x: w / 2, y: h + t / 2 });
+    Body.setPosition(floor, { x: w / 2, y: h - floorInset + t / 2 });
     Body.setVertices(wallLeft, Bodies.rectangle(0, 0, t, h * 4, { isStatic: true }).vertices);
     Body.setPosition(wallLeft, { x: -t / 2, y: h / 2 });
     Body.setVertices(wallRight, Bodies.rectangle(0, 0, t, h * 4, { isStatic: true }).vertices);
@@ -208,6 +212,11 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
 
   requestAnimationFrame(frame);
 
+  function setFloorInset(px: number) {
+    floorInset = Math.max(0, px);
+    layoutBounds();
+  }
+
   function setGravity(x: number, y: number) {
     engine.gravity.x = Math.max(-1, Math.min(1, x));
     engine.gravity.y = Math.max(-1, Math.min(1, y));
@@ -222,5 +231,5 @@ export function mountStage(canvas: HTMLCanvasElement, options: StageOptions = {}
     }
   }
 
-  return { spawnLetter, setGravity, shake };
+  return { spawnLetter, setFloorInset, setGravity, shake };
 }
