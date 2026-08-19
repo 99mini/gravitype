@@ -63,6 +63,8 @@ export const MOTION = {
 export const WORLD = {
   /** 바닥·벽 두께(px). 두껍게 해야 빠른 물체가 뚫고 나가지 않는다 */
   wallThicknessPx: 200,
+  /** 바닥과 UI(입력 박스 등) 사이 여백(px) */
+  floorGapPx: 8,
   /** 스폰 위치: 화면 상단 중앙에서 이만큼 위 */
   spawnAboveTopPx: 40,
   /** 스폰 시 좌우 랜덤 흔들림(px) — 같은 자리에 정확히 쌓여 탑이 되는 것 방지 */

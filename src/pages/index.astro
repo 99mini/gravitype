@@ -34,7 +34,7 @@ const base = import.meta.env.BASE_URL.endsWith("/")
 </html>
 
 <script>
-  import { MOTION } from "../lib/constants";
+  import { MOTION, WORLD } from "../lib/constants";
   import { keepFocusForDesktop, wireLetterInput } from "../lib/input";
   import { setupMotion } from "../lib/motion";
   import { mountStage } from "../lib/stage";
@@ -48,6 +48,14 @@ const base = import.meta.env.BASE_URL.endsWith("/")
   }
 
   const stage = mountStage(canvas, { onFirstSpawn: () => hint?.remove() });
+
+  // 물리 바닥을 입력 박스 위로 올려서 쌓인 글자가 가려지지 않게 한다
+  function updateFloor() {
+    const inputTop = input!.getBoundingClientRect().top;
+    stage.setFloorInset(window.innerHeight - inputTop + WORLD.floorGapPx);
+  }
+  updateFloor();
+  window.addEventListener("resize", updateFloor);
 
   // 글자를 몇 개 쌓은 뒤에 기울기/흔들기를 켠다 (iOS 는 힌트 버튼으로 권한 요청)
   let spawnCount = 0;
